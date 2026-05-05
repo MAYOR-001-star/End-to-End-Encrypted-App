@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import type { User, Message } from '../lib/api';
+import type { Message } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { decryptMessage, encryptMessage, importPublicKey } from '../lib/crypto';
 import { socketManager } from '../lib/socket';
@@ -72,7 +72,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
         }
       }
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, [recipientId, privateKey]);
 
   useEffect(() => {

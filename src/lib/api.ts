@@ -79,8 +79,19 @@ class APIClient {
     }
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-      throw new Error(error.detail || "Request failed");
+      const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+      let message = "Request failed";
+
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        // Handle FastAPI validation errors: [{loc:[], msg:"", type:""}]
+        message = errorData.detail.map((d: any) => `${d.loc?.join('.') || 'error'}: ${d.msg}`).join(', ');
+      } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+        message = JSON.stringify(errorData.detail);
+      }
+
+      throw new Error(message);
     }
 
     return response.json();

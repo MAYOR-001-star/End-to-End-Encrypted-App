@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { generateRSAKeyPair, exportPublicKey, wrapPrivateKey, arrayBufferToBase64, deriveWrappingKey } from '../lib/crypto';
-import { Shield, Lock, User, AtSign, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, AtSign, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export const AuthView: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
