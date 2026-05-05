@@ -4,10 +4,11 @@ import type { Message } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { decryptMessage, encryptMessage, importPublicKey } from '../lib/crypto';
 import { socketManager } from '../lib/socket';
-import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, FileIcon, Download, X, ImageIcon, FileText, Music, Play } from 'lucide-react';
+import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, FileIcon, Download, X, ImageIcon, FileText, Music, Play, ArrowLeft } from 'lucide-react';
 
 interface ChatWindowProps {
   user: any;
+  onBack?: () => void;
 }
 
 interface DecryptedContent {
@@ -19,7 +20,7 @@ interface DecryptedContent {
   mimeType?: string;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack }) => {
   const { user: currentUser, privateKey } = useAuth();
   const [messages, setMessages] = useState<(Message & { content?: DecryptedContent })[]>([]);
   const [inputText, setInputText] = useState('');
@@ -138,24 +139,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert("File too large. Max size is 2MB for E2EE stability.");
+    // Base64 encoding increases size by ~33%, so we limit to 1.5MB to stay safe
+    if (file.size > 1.5 * 1024 * 1024) {
+      alert("Image/File is too large for secure real-time delivery. Please limit to 1.5MB.");
       return;
     }
 
     setIsUploading(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
-      
-      await handleSend(undefined, {
-        type,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        fileData: base64
-      });
+      try {
+        const base64 = event.target?.result as string;
+        if (!base64) throw new Error("Failed to read file");
+        
+        const type = file.type.startsWith('image/') ? 'image' : 
+                     file.type.startsWith('video/') ? 'video' : 
+                     file.type.startsWith('audio/') ? 'audio' : 'file';
+        
+        await handleSend(undefined, {
+          type: type as any,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          fileData: base64
+        });
+      } catch (err) {
+        console.error("File processing failed:", err);
+        alert("Could not process file. Please try again.");
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+      }
+    };
+    reader.onerror = () => {
+      alert("Error reading file.");
       setIsUploading(false);
     };
     reader.readAsDataURL(file);
@@ -236,7 +253,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
     }
 
     return (
-      <div className="flex items-center gap-3 bg-black/10 p-2 rounded-lg border border-white/5 group hover:bg-black/20 transition-colors">
+      <div className="flex items-center gap-3 bg-black/10 p-2 rounded-lg border border-white/5 group hover:bg-black/20 transition-colors cursor-pointer" onClick={() => window.open(content.fileData)}>
         <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center text-accent">
           <FileText size={24} />
         </div>
@@ -262,11 +279,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
       {/* Header */}
       <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header border-l border-border-main z-10 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-slate-500 flex items-center justify-center font-semibold text-white uppercase overflow-hidden">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="md:hidden text-[#aebac1] hover:text-text-primary transition-colors p-1 -ml-2"
+            >
+              <ArrowLeft size={24} />
+            </button>
+          )}
+          <div className="w-10 h-10 rounded-full bg-slate-500 flex items-center justify-center font-semibold text-white uppercase overflow-hidden shrink-0">
             {recipient.display_name[0]}
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-medium">{recipient.display_name}</span>
+            <span className="text-base font-medium leading-tight">{recipient.display_name}</span>
             <span className="text-[11px] text-text-secondary flex items-center gap-1">
               <Shield size={10} className="text-accent" /> End-to-End Encrypted
             </span>

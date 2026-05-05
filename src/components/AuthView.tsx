@@ -7,6 +7,7 @@ export const AuthView: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { login, register } = useAuth();
 
@@ -125,13 +126,20 @@ export const AuthView: React.FC = () => {
             <div className="flex items-center bg-bg-tertiary rounded-lg px-4 border-b-2 border-transparent focus-within:border-accent transition-all duration-200">
               <Lock size={18} className="text-text-dim mr-3 shrink-0" />
               <input
-                type={showPassword ? "text" : "password"}
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirm Password"
                 className="w-full py-4 text-sm bg-transparent outline-none text-text-primary placeholder:text-text-dim"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 required
               />
+              <button 
+                type="button" 
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="text-text-dim hover:text-text-secondary transition-colors"
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           )}
 
