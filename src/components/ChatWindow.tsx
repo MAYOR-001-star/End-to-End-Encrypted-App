@@ -58,11 +58,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
         try {
           if (privateKey) {
             const plaintext = await decryptMessage(event.payload, privateKey, false);
-            setMessages(prev => [...prev, { ...event, plaintext }]);
+            const msg: Message & { plaintext?: string } = {
+              ...event,
+              plaintext,
+              delivered: true // Incoming messages are delivered
+            };
+            setMessages(prev => [...prev, msg]);
           }
         } catch (e) {
           console.error("Failed to decrypt incoming message", e);
-          setMessages(prev => [...prev, event]);
+          const fallbackMsg: Message = { ...event, delivered: true };
+          setMessages(prev => [...prev, fallbackMsg]);
         }
       }
     });
@@ -88,12 +94,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
       const encryptedPayload = await encryptMessage(text, recipientPubKey, myPubKey);
       socketManager.send(recipientId, encryptedPayload);
 
-      const optimisticMsg: any = {
+      const optimisticMsg: Message & { plaintext: string } = {
         id: Math.random().toString(),
         from_user_id: currentUser.id,
         to_user_id: recipientId,
         payload: encryptedPayload,
         plaintext: text,
+        delivered: true,
         created_at: new Date().toISOString()
       };
       setMessages(prev => [...prev, optimisticMsg]);

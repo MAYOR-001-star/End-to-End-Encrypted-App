@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import type { Conversation, User } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Search, MessageSquarePlus, LogOut, Shield, User as UserIcon } from 'lucide-react';
+import { Search, MessageSquarePlus, LogOut, Shield } from 'lucide-react';
 
 interface SidebarProps {
   onSelectUser: (user: any) => void;
