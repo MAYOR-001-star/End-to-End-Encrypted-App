@@ -44,7 +44,9 @@ export const AuthView: React.FC = () => {
         });
       }
     } catch (err: any) {
-      setError(err.message || "Authentication failed");
+      console.error("Auth error:", err);
+      const message = err?.message || (typeof err === 'string' ? err : "An unexpected error occurred");
+      setError(message);
     } finally {
       setLoading(false);
     }
