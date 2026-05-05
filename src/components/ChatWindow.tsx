@@ -4,7 +4,7 @@ import type { Message } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { decryptMessage, encryptMessage, importPublicKey } from '../lib/crypto';
 import { socketManager } from '../lib/socket';
-import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, Download, FileText, Play, ArrowLeft } from 'lucide-react';
+import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, Download, FileText, Play, ArrowLeft, User as UserIcon } from 'lucide-react';
 
 interface ChatWindowProps {
   user: any;
@@ -12,12 +12,14 @@ interface ChatWindowProps {
 }
 
 interface DecryptedContent {
-  type: 'text' | 'file' | 'image' | 'video';
+  type: 'text' | 'file' | 'image' | 'video' | 'audio' | 'sticker' | 'contact';
   text?: string;
   fileName?: string;
-  fileData?: string; // base64
+  fileData?: string; // base64 or sticker URL
   fileSize?: number;
   mimeType?: string;
+  contactName?: string;
+  contactId?: string;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack }) => {
@@ -252,6 +254,39 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack 
       );
     }
 
+    if (content.type === 'sticker') {
+      return (
+        <div className="flex items-center justify-center p-0">
+          <img 
+            src={content.fileData} 
+            alt="Sticker" 
+            className="w-40 h-40 object-contain drop-shadow-lg"
+          />
+        </div>
+      );
+    }
+
+    if (content.type === 'contact') {
+      return (
+        <div className="flex flex-col gap-3 min-w-[220px] bg-black/10 rounded-lg p-3 border border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-slate-500 flex items-center justify-center text-white font-bold text-xl">
+              {content.contactName?.[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold truncate">{content.contactName}</div>
+              <div className="text-[11px] opacity-60 uppercase tracking-tighter">WhisperBox Contact</div>
+            </div>
+          </div>
+          <button 
+            className="w-full py-2 bg-white/5 hover:bg-white/10 text-accent font-medium text-sm rounded transition-colors border-t border-white/5 mt-1"
+          >
+            Message
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center gap-3 bg-black/10 p-2 rounded-lg border border-white/5 group hover:bg-black/20 transition-colors cursor-pointer" onClick={() => window.open(content.fileData)}>
         <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center text-accent">
@@ -277,24 +312,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack 
   return (
     <div className="flex-1 flex flex-col bg-bg-primary relative overflow-hidden h-full">
       {/* Header */}
-      <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header border-l border-border-main z-10 shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header border-l border-border-main z-20 shrink-0">
+        <div className="flex items-center gap-3 md:gap-4 overflow-hidden flex-1">
           {onBack && (
             <button 
               onClick={onBack}
-              className="md:hidden text-[#aebac1] hover:text-text-primary transition-colors p-1 -ml-2"
+              className="md:hidden text-[#aebac1] hover:text-text-primary transition-colors p-2 -ml-2"
             >
               <ArrowLeft size={24} />
             </button>
           )}
-          <div className="w-10 h-10 rounded-full bg-slate-500 flex items-center justify-center font-semibold text-white uppercase overflow-hidden shrink-0">
-            {recipient.display_name[0]}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-base font-medium leading-tight">{recipient.display_name}</span>
-            <span className="text-[11px] text-text-secondary flex items-center gap-1">
-              <Shield size={10} className="text-accent" /> End-to-End Encrypted
-            </span>
+          <div className="flex items-center gap-3 cursor-pointer overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-slate-500 flex items-center justify-center font-semibold text-white uppercase overflow-hidden shrink-0">
+              {recipient.display_name[0]}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[16px] font-medium leading-tight truncate">{recipient.display_name}</span>
+              <span className="text-[11px] text-text-secondary flex items-center gap-1">
+                <Shield size={10} className="text-accent" /> End-to-End Encrypted
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex gap-6 text-[#aebac1]">
@@ -325,30 +362,39 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack 
               Messages are end-to-end encrypted. No one outside of this chat can read them.
             </div>
             
-            {messages.map(msg => (
-              <div 
-                key={msg.id} 
-                className={`flex w-full mb-0.5 ${msg.from_user_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[85%] sm:max-w-[65%] p-1.5 px-2.5 rounded-lg shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative flex flex-col ${msg.from_user_id === currentUser?.id ? 'bg-bubble-out rounded-tr-none' : 'bg-bubble-in rounded-tl-none'}`}>
-                  {/* Tail Effect */}
-                  <div className={`absolute top-0 w-2 h-2 ${msg.from_user_id === currentUser?.id ? '-right-2 border-t-[8px] border-l-[8px] border-t-bubble-out border-l-bubble-out border-transparent' : '-left-2 border-t-[8px] border-r-[8px] border-t-bubble-in border-r-bubble-in border-transparent'}`} />
-                  
-                  {msg.content ? renderMessageContent(msg.content) : (
-                    <div className="italic opacity-60 text-sm">Decryption failed or key missing</div>
-                  )}
-
-                  <div className="flex items-center justify-end gap-1 mt-1 h-[15px]">
-                    <span className="text-[10px] text-white/50 uppercase">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {msg.from_user_id === currentUser?.id && (
-                      <CheckCheck size={14} className="text-[#53bdeb]" />
+            {messages.map(msg => {
+              const isSticker = msg.content?.type === 'sticker';
+              return (
+                <div 
+                  key={msg.id} 
+                  className={`flex w-full mb-0.5 ${msg.from_user_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[85%] sm:max-w-[65%] p-1.5 px-2.5 rounded-lg relative flex flex-col ${
+                    isSticker 
+                      ? 'bg-transparent shadow-none' 
+                      : (msg.from_user_id === currentUser?.id ? 'bg-bubble-out shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] rounded-tr-none' : 'bg-bubble-in shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] rounded-tl-none')
+                  }`}>
+                    {/* Tail Effect - Hidden for stickers */}
+                    {!isSticker && (
+                      <div className={`absolute top-0 w-2 h-2 ${msg.from_user_id === currentUser?.id ? '-right-2 border-t-[8px] border-l-[8px] border-t-bubble-out border-l-bubble-out border-transparent' : '-left-2 border-t-[8px] border-r-[8px] border-t-bubble-in border-r-bubble-in border-transparent'}`} />
                     )}
+                    
+                    {msg.content ? renderMessageContent(msg.content) : (
+                      <div className="italic opacity-60 text-sm">Decryption failed or key missing</div>
+                    )}
+
+                    <div className={`flex items-center justify-end gap-1 mt-1 h-[15px] ${isSticker ? 'bg-black/20 px-1.5 py-0.5 rounded-full self-end' : ''}`}>
+                      <span className="text-[10px] text-white/50 uppercase">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {msg.from_user_id === currentUser?.id && (
+                        <CheckCheck size={14} className={isSticker ? 'text-white/70' : 'text-[#53bdeb]'} />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
