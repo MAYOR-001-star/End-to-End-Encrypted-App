@@ -4,7 +4,7 @@ import type { Message } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { decryptMessage, encryptMessage, importPublicKey } from '../lib/crypto';
 import { socketManager } from '../lib/socket';
-import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, Download, FileText, Play, ArrowLeft, User as UserIcon } from 'lucide-react';
+import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, Download, FileText, Play, ArrowLeft } from 'lucide-react';
 
 interface ChatWindowProps {
   user: any;
