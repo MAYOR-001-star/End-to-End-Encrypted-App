@@ -45,7 +45,14 @@ export const AuthView: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      const message = err?.message || (typeof err === 'string' ? err : "An unexpected error occurred");
+      let message = "An unexpected error occurred";
+      
+      if (err.name === 'OperationError') {
+        message = "Incorrect password or corrupted secure key. If you recently updated the app, please try creating a new account.";
+      } else {
+        message = err?.message || (typeof err === 'string' ? err : message);
+      }
+      
       setError(message);
     } finally {
       setLoading(false);
