@@ -4,21 +4,41 @@ import type { Message } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { decryptMessage, encryptMessage, importPublicKey } from '../lib/crypto';
 import { socketManager } from '../lib/socket';
-import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic } from 'lucide-react';
+import { Send, Shield, Info, MoreVertical, Phone, Video, CheckCheck, Smile, Paperclip, Mic, FileIcon, Download, X, ImageIcon, FileText, Music, Play } from 'lucide-react';
 
 interface ChatWindowProps {
   user: any;
 }
 
+interface DecryptedContent {
+  type: 'text' | 'file' | 'image' | 'video';
+  text?: string;
+  fileName?: string;
+  fileData?: string; // base64
+  fileSize?: number;
+  mimeType?: string;
+}
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
   const { user: currentUser, privateKey } = useAuth();
-  const [messages, setMessages] = useState<(Message & { plaintext?: string })[]>([]);
+  const [messages, setMessages] = useState<(Message & { content?: DecryptedContent })[]>([]);
   const [inputText, setInputText] = useState('');
   const [recipientPubKey, setRecipientPubKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const recipientId = recipient.user_id || recipient.id;
+
+  const parseContent = (plaintext: string): DecryptedContent => {
+    try {
+      if (plaintext.startsWith('{') && plaintext.endsWith('}')) {
+        return JSON.parse(plaintext);
+      }
+    } catch (e) {}
+    return { type: 'text', text: plaintext };
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -33,7 +53,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
             if (privateKey) {
               const isSender = msg.from_user_id === currentUser?.id;
               const plaintext = await decryptMessage(msg.payload, privateKey, isSender);
-              return { ...msg, plaintext };
+              return { ...msg, content: parseContent(plaintext) };
             }
           } catch (e) {
             console.error("Failed to decrypt message", msg.id, e);
@@ -58,17 +78,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
         try {
           if (privateKey) {
             const plaintext = await decryptMessage(event.payload, privateKey, false);
-            const msg: Message & { plaintext?: string } = {
+            const msg: any = {
               ...event,
-              plaintext,
-              delivered: true // Incoming messages are delivered
+              content: parseContent(plaintext),
+              delivered: true
             };
             setMessages(prev => [...prev, msg]);
           }
         } catch (e) {
           console.error("Failed to decrypt incoming message", e);
-          const fallbackMsg: Message = { ...event, delivered: true };
-          setMessages(prev => [...prev, fallbackMsg]);
+          setMessages(prev => [...prev, { ...event, delivered: true }]);
         }
       }
     });
@@ -83,25 +102,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
     }
   }, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || !recipientPubKey || !privateKey || !currentUser) return;
+  const handleSend = async (e?: React.FormEvent, customContent?: DecryptedContent) => {
+    if (e) e.preventDefault();
+    
+    const content = customContent || { type: 'text', text: inputText };
+    if (content.type === 'text' && !content.text?.trim()) return;
+    if (!recipientPubKey || !privateKey || !currentUser) return;
 
-    const text = inputText;
-    setInputText('');
+    if (!customContent) setInputText('');
 
     try {
       if (!currentUser.public_key) return;
       const myPubKey = await importPublicKey(currentUser.public_key);
-      const encryptedPayload = await encryptMessage(text, recipientPubKey, myPubKey);
+      const plaintext = JSON.stringify(content);
+      const encryptedPayload = await encryptMessage(plaintext, recipientPubKey, myPubKey);
+      
       socketManager.send(recipientId, encryptedPayload);
 
-      const optimisticMsg: Message & { plaintext: string } = {
+      const optimisticMsg: any = {
         id: Math.random().toString(),
         from_user_id: currentUser.id,
         to_user_id: recipientId,
         payload: encryptedPayload,
-        plaintext: text,
+        content,
         delivered: true,
         created_at: new Date().toISOString()
       };
@@ -111,8 +134,131 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("File too large. Max size is 2MB for E2EE stability.");
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+      
+      await handleSend(undefined, {
+        type,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        fileData: base64
+      });
+      setIsUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const renderMessageContent = (content: DecryptedContent) => {
+    if (content.type === 'text') {
+      return <div className="break-words leading-[19px] text-text-primary text-[14.2px]">{content.text}</div>;
+    }
+
+    if (content.type === 'image') {
+      return (
+        <div className="flex flex-col gap-1 -m-1">
+          <img 
+            src={content.fileData} 
+            alt={content.fileName} 
+            className="rounded-lg max-h-72 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => window.open(content.fileData)}
+          />
+          {content.fileName && <span className="text-xs opacity-70 px-1">{content.fileName}</span>}
+        </div>
+      );
+    }
+
+    if (content.type === 'video') {
+      return (
+        <div className="flex flex-col gap-1 -m-1">
+          <video 
+            src={content.fileData} 
+            controls 
+            className="rounded-lg max-h-72 object-cover"
+          />
+          {content.fileName && <span className="text-xs opacity-70 px-1">{content.fileName}</span>}
+        </div>
+      );
+    }
+
+    if (content.mimeType?.startsWith('audio/')) {
+      return (
+        <div className="flex flex-col gap-2 min-w-[240px] py-1">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent">
+              <Play size={20} fill="currentColor" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-medium truncate">{content.fileName}</div>
+              <div className="text-[10px] opacity-60">AUDIO • {(content.fileSize! / 1024).toFixed(1)} KB</div>
+            </div>
+          </div>
+          <audio src={content.fileData} controls className="w-full h-8 custom-audio" />
+        </div>
+      );
+    }
+
+    if (content.mimeType === 'application/pdf') {
+      return (
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-white/10 group cursor-pointer" onClick={() => window.open(content.fileData)}>
+            <div className="w-12 h-12 rounded bg-red-500/20 flex items-center justify-center text-red-500">
+              <FileText size={32} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{content.fileName}</div>
+              <div className="text-[10px] opacity-60">PDF DOCUMENT</div>
+            </div>
+            <div className="text-white/40 group-hover:text-white transition-colors">
+              <Info size={18} />
+            </div>
+          </div>
+          <button 
+            onClick={() => window.open(content.fileData)}
+            className="text-center py-2 text-xs font-bold text-accent hover:bg-accent/10 rounded transition-colors"
+          >
+            OPEN PREVIEW
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-3 bg-black/10 p-2 rounded-lg border border-white/5 group hover:bg-black/20 transition-colors">
+        <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center text-accent">
+          <FileText size={24} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{content.fileName}</div>
+          <div className="text-[10px] opacity-60 uppercase">
+            {(content.fileSize! / 1024).toFixed(1)} KB • {content.fileName?.split('.').pop()}
+          </div>
+        </div>
+        <a 
+          href={content.fileData} 
+          download={content.fileName}
+          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+        >
+          <Download size={16} />
+        </a>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary relative">
+    <div className="flex-1 flex flex-col bg-bg-primary relative overflow-hidden">
       {/* Header */}
       <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header border-l border-border-main z-10 shrink-0">
         <div className="flex items-center gap-3">
@@ -136,14 +282,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
 
       {/* Message List */}
       <div 
-        className="flex-1 overflow-y-auto px-[7%] py-5 flex flex-col gap-1 relative bg-[#0b141a] bg-repeat" 
+        className="flex-1 overflow-y-auto px-[7%] py-5 flex flex-col gap-1 relative bg-[#0b141a]" 
         ref={scrollRef}
         style={{ 
           backgroundImage: `url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')`,
           backgroundSize: '400px'
         }}
       >
-        {/* Overlay for better readability */}
         <div className="absolute inset-0 bg-[#0b141a]/90 z-0 pointer-events-none" />
 
         {isLoading ? (
@@ -152,7 +297,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
           <div className="flex flex-col gap-1 z-10">
             <div className="self-center bg-[#182229] text-[#ffd279] px-3 py-1.5 rounded-lg text-xs text-center mb-5 flex items-center gap-2 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)]">
               <Shield size={14} />
-              Messages are end-to-end encrypted. No one outside of this chat, not even WhisperBox, can read them.
+              Messages are end-to-end encrypted. No one outside of this chat can read them.
             </div>
             
             {messages.map(msg => (
@@ -160,19 +305,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
                 key={msg.id} 
                 className={`flex w-full mb-0.5 ${msg.from_user_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[65%] p-1.5 px-2.5 rounded-lg shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative flex flex-col ${msg.from_user_id === currentUser?.id ? 'bg-bubble-out rounded-tr-none' : 'bg-bubble-in rounded-tl-none'}`}>
+                <div className={`max-w-[85%] sm:max-w-[65%] p-1.5 px-2.5 rounded-lg shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative flex flex-col ${msg.from_user_id === currentUser?.id ? 'bg-bubble-out rounded-tr-none' : 'bg-bubble-in rounded-tl-none'}`}>
                   {/* Tail Effect */}
                   <div className={`absolute top-0 w-2 h-2 ${msg.from_user_id === currentUser?.id ? '-right-2 border-t-[8px] border-l-[8px] border-t-bubble-out border-l-bubble-out border-transparent' : '-left-2 border-t-[8px] border-r-[8px] border-t-bubble-in border-r-bubble-in border-transparent'}`} />
                   
-                  <div className="break-words leading-[19px] text-text-primary text-[14.2px]">
-                    {msg.plaintext || <span className="italic opacity-60">Decryption failed or key missing</span>}
-                  </div>
-                  <div className="flex items-center justify-end gap-1 -mt-1 h-[15px]">
-                    <span className="text-[11px] text-white/50 uppercase">
+                  {msg.content ? renderMessageContent(msg.content) : (
+                    <div className="italic opacity-60 text-sm">Decryption failed or key missing</div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-1 mt-1 h-[15px]">
+                    <span className="text-[10px] text-white/50 uppercase">
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {msg.from_user_id === currentUser?.id && (
-                      <CheckCheck size={16} className="text-[#53bdeb]" />
+                      <CheckCheck size={14} className="text-[#53bdeb]" />
                     )}
                   </div>
                 </div>
@@ -183,24 +329,56 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient }) => {
       </div>
 
       {/* Input Area */}
-      <form className="min-h-[62px] px-4 py-1.5 bg-panel-header flex items-center gap-2 shrink-0" onSubmit={handleSend}>
-        <div className="flex gap-3 text-[#8696a0]">
-          <button type="button" className="hover:text-[#aebac1] transition-colors"><Smile size={24} /></button>
-          <button type="button" className="hover:text-[#aebac1] transition-colors"><Paperclip size={24} /></button>
-        </div>
-        <div className="flex-1 bg-[#2a3942] rounded-lg px-3 mx-2">
+      <div className="bg-panel-header min-h-[62px]">
+        {isUploading && (
+          <div className="px-4 py-2 bg-accent/10 border-b border-accent/20 flex items-center gap-3 animate-pulse">
+            <Loader2 className="animate-spin text-accent" size={18} />
+            <span className="text-xs text-accent font-medium uppercase tracking-wider">Encrypting & Sending File...</span>
+          </div>
+        )}
+        
+        <form className="px-4 py-1.5 flex items-center gap-2" onSubmit={handleSend}>
           <input 
-            type="text" 
-            placeholder="Type a message" 
-            className="w-full py-2.5 text-[15px] text-text-primary bg-transparent outline-none"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            type="file" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleFileChange}
           />
-        </div>
-        <button type={inputText.trim() ? "submit" : "button"} className="text-[#8696a0] p-2 hover:text-[#aebac1] transition-colors">
-          {inputText.trim() ? <Send size={24} /> : <Mic size={24} />}
-        </button>
-      </form>
+          
+          <div className="flex gap-3 text-[#8696a0]">
+            <button type="button" className="hover:text-[#aebac1] transition-colors"><Smile size={24} /></button>
+            <button 
+              type="button" 
+              className="hover:text-[#aebac1] transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={24} />
+            </button>
+          </div>
+          
+          <div className="flex-1 bg-[#2a3942] rounded-lg px-3 mx-2">
+            <input 
+              type="text" 
+              placeholder="Type a message" 
+              className="w-full py-2.5 text-[15px] text-text-primary bg-transparent outline-none"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+            />
+          </div>
+          
+          <button 
+            type={(inputText.trim() || isUploading) ? "submit" : "button"} 
+            className="text-[#8696a0] p-2 hover:text-[#aebac1] transition-colors disabled:opacity-50"
+            disabled={isUploading}
+          >
+            {(inputText.trim()) ? <Send size={24} /> : <Mic size={24} />}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
+
+const Loader2 = ({ className, size }: { className?: string, size?: number }) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+);
