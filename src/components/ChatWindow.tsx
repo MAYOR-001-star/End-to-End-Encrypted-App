@@ -275,7 +275,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ user: recipient, onBack 
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary relative overflow-hidden">
+    <div className="flex-1 flex flex-col bg-bg-primary relative overflow-hidden h-full">
       {/* Header */}
       <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header border-l border-border-main z-10 shrink-0">
         <div className="flex items-center gap-3">
