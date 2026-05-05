@@ -1,73 +1,62 @@
-# React + TypeScript + Vite
+# WhisperBox — End-to-End Encrypted Messaging
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+WhisperBox is a premium, high-security messaging application that implements true End-to-End Encryption (E2EE). The server only handles encrypted blobs; all cryptographic operations occur exclusively on the user's device.
 
-Currently, two official plugins are available:
+## 🏗️ Architecture
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```mermaid
+graph TD
+    UserA[User A - Client] <--> Server[WhisperBox Backend]
+    UserB[User B - Client] <--> Server
+    
+    subgraph "Client Side (E2EE)"
+        KeyGen[Key Generation]
+        Enc[AES-256-GCM Encryption]
+        Dec[AES-256-GCM Decryption]
+        Wrap[Private Key Wrapping]
+    end
+    
+    subgraph "Server Side"
+        Storage[Encrypted Blob Storage]
+        Auth[Identity & Token Management]
+    end
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🔐 Encryption Flow
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+WhisperBox uses a **Hybrid Encryption** scheme combining asymmetric (RSA) and symmetric (AES) cryptography.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### 1. Registration & Key Setup
+- The client generates a **2048-bit RSA-OAEP** keypair.
+- A **128-bit PBKDF2 salt** is generated.
+- A wrapping key is derived from the user's password using **PBKDF2 (100,000 iterations)**.
+- The RSA private key is wrapped (encrypted) using **AES-256-GCM** (with a prepended 12-byte IV) and sent to the server.
+- The RSA public key is sent to the server in plaintext for other users to fetch.
+
+### 2. Sending a Message
+1. **Fetch Public Key**: The sender fetches the recipient's RSA public key from the server.
+2. **Symmetric Encryption**: A random **256-bit AES-GCM key** and **96-bit IV** are generated. The plaintext is encrypted with this key.
+3. **Asymmetric Encryption**: 
+    - The AES key is encrypted with the **recipient's** RSA public key.
+    - The AES key is also encrypted with the **sender's** RSA public key (allowing the sender to read their own sent messages on other devices).
+4. **Transmission**: The encrypted ciphertext, IV, and both encrypted keys are sent to the backend.
+
+### 3. Receiving a Message
+1. The recipient receives the encrypted payload.
+2. The recipient uses their **RSA private key** to decrypt the AES-GCM key.
+3. The recipient uses the AES-GCM key + IV to decrypt the ciphertext into plaintext.
+
+## 🔑 Key Management
+- **Public Keys**: Stored on the server and accessible to all registered users.
+- **Private Keys**: Stored on the server **only in wrapped (encrypted) form**. They can only be decrypted using the user's password, which never leaves the client.
+- **Session Security**: Once unwrapped, the private key is held in memory for the duration of the session and never written to `localStorage`.
+
+## ⚖️ Security Trade-offs
+- **Password Strength**: Since the private key is wrapped with a password-derived key, the security of the E2EE relies heavily on the user's password strength.
+- **No Password Recovery**: If a user forgets their password, their private key cannot be unwrapped, and all previous messages become permanently unreadable.
+- **Client-Side Trust**: The system assumes the client device is not compromised.
+
+## ⚠️ Known Limitations
+- **Forward Secrecy**: The current implementation uses a static RSA keypair. Compromise of the private key would allow decryption of all past messages if the attacker had stored the ciphertexts.
+- **Metadata**: While message content is encrypted, the server still knows who is talking to whom and when (traffic analysis).
+- **Device Sync**: To log in on a new device, the user must provide their password to unwrap the private key fetched from the server.

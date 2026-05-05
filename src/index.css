@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0b141a;
+  --color-bg-secondary: #111b21;
+  --color-bg-tertiary: #202c33;
+  --color-bg-hover: #2a3942;
+  --color-bg-chat: #0b141a;
+  
+  --color-text-primary: #e9edef;
+  --color-text-secondary: #8696a0;
+  --color-text-accent: #00a884;
+  --color-text-danger: #f15c6d;
+  --color-text-dim: #667781;
+  
+  --color-accent: #00a884;
+  --color-accent-light: #06cf9c;
+  
+  --color-border-main: #222d34;
+  --color-border-light: #313d45;
+  
+  --color-bubble-out: #005c4b;
+  --color-bubble-in: #202c33;
+  
+  --color-panel-header: #202c33;
+  --color-search-bg: #202c33;
+}
+
+@layer base {
+  * {
+    @apply border-border-main;
+  }
+  body {
+    @apply bg-bg-primary text-text-primary overflow-hidden h-screen w-screen font-sans;
+  }
+}
+
+@layer utilities {
+  .glass-morphism {
+    @apply bg-bg-secondary/85 backdrop-blur-xl border border-white/5;
+  }
+  
+  .message-bubble-out {
+    @apply bg-bubble-out relative rounded-lg py-1.5 px-2.5 shadow-sm;
+  }
+  
+  .message-bubble-in {
+    @apply bg-bubble-in relative rounded-lg py-1.5 px-2.5 shadow-sm;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374045;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #51636d;
+}
