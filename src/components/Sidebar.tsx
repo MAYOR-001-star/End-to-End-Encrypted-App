@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectUser, selectedUserId }
   };
 
   return (
-    <div className="w-[380px] flex flex-col bg-bg-primary border-r border-border-main shrink-0">
+    <div className="w-full h-full flex flex-col bg-bg-primary border-r border-border-main shrink-0">
       {/* Header */}
       <header className="h-[60px] px-4 flex justify-between items-center bg-panel-header shrink-0">
         <div className="flex items-center gap-3">

@@ -61,11 +61,11 @@ export const AuthView: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-bg-primary relative overflow-hidden">
+    <div className="flex items-center justify-center min-h-[100dvh] bg-bg-primary relative overflow-hidden p-4">
       {/* Green Banner */}
       <div className="absolute top-0 left-0 right-0 h-[220px] bg-accent z-0" />
       
-      <div className="w-full max-w-[480px] p-12 bg-bg-secondary shadow-[0_17px_50px_0_rgba(0,0,0,0.19),0_12px_15px_0_rgba(0,0,0,0.24)] z-10 animate-fade">
+      <div className="w-full max-w-[480px] p-6 sm:p-12 bg-bg-secondary shadow-[0_17px_50px_0_rgba(0,0,0,0.19),0_12px_15px_0_rgba(0,0,0,0.24)] z-10 animate-fade rounded-lg">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <img src="/logo.png" alt="WhisperBox Logo" className="w-20 h-20" />
